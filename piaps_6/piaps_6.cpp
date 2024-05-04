@@ -1,77 +1,118 @@
-﻿#include <iostream>
+#include <iostream>
 #include <vector>
-#include <string>
+#include <map>
+#include <cstdlib>
+#include <ctime>
+#include <algorithm>
 
-using namespace std;
+class Database; // Forward declaration
 
-// Абстрактный класс для наблюдателя
-class Observer {
+// Observer interface
+class IObserver {
 public:
-    virtual void update(bool success) = 0;
+    virtual void Update(std::map<std::string, int> report) = 0;
 };
 
-// Конкретный наблюдатель - кафедра
-class Department : public Observer {
+// Observable interface
+class IObservable {
 public:
-    void update(bool success) override {
-        if (success) {
-            cout << "Успеваемость создана вовремя. Кафедра уведомлена." << endl;
-        }
-        else {
-            cout << "Успеваемость не создана вовремя! Кафедра оповещена." << endl;
+    virtual void RegisterObserver(IObserver* observer) = 0;
+    virtual void RemoveObserver(IObserver* observer) = 0;
+    virtual void NotifyObservers() = 0;
+};
+
+// Concrete Observer class
+class Deanery : public IObserver {
+private:
+    Database* database;
+
+public:
+    Deanery(Database* db);
+
+    void Update(std::map<std::string, int> report) override {
+        for (const auto& pair : report) {
+            if (pair.second == 0) {
+                std::cout << "Деканат: " << pair.first << " не создал отчет вовремя!" << std::endl;
+            }
         }
     }
 };
 
-// Абстрактный класс для субъекта
-class Subject {
+// Teacher class
+class Teacher {
+private:
+    Database* database;
+    std::string name;
+
 public:
-    virtual void attach(Observer* observer) = 0;
-    virtual void detach(Observer* observer) = 0;
-    virtual void notifyObservers(bool success) = 0;
+    Teacher(const std::string& name, Database* database);
+
+    std::string GetName() const {
+        return name;
+    }
+
+    int WriteReport() {
+        // Simulating whether the report is created in time or not
+        return rand() % 2;
+    }
 };
 
-// Конкретный субъект - деканат
-class DeanOffice : public Subject {
+// Concrete Observable class
+class Database : public IObservable {
 private:
-    vector<Observer*> observers;
-    bool success;
+    std::vector<IObserver*> observers;
+    std::vector<Teacher*> teachers;
+    std::map<std::string, int> report_;
 
 public:
-    void attach(Observer* observer) override {
+    void RegisterObserver(IObserver* observer) override {
         observers.push_back(observer);
     }
 
-    void detach(Observer* observer) override {
-        // Метод detach можно также реализовать для удаления наблюдателей
-        // из списка наблюдателей (observers), но для этого примера не нужен.
+    void RemoveObserver(IObserver* observer) override {
+        observers.erase(std::remove(observers.begin(), observers.end(), observer), observers.end());
     }
 
-    void notifyObservers(bool success) override {
-        for (Observer* observer : observers) {
-            observer->update(success);
+    void NotifyObservers() override {
+        for (auto observer : observers) {
+            observer->Update(report_);
         }
     }
 
-    void createProgress(bool success) {
-        this->success = success;
-        notifyObservers(success);
+    void RegisterTeacher(Teacher* teacher) {
+        teachers.push_back(teacher);
+    }
+
+    void EndOfWeek() {
+        for (auto teacher : teachers) {
+            report_[teacher->GetName()] = teacher->WriteReport();
+        }
+        NotifyObservers();
     }
 };
 
+// Implementations of Deanery and Teacher constructors
+Deanery::Deanery(Database* db) : database(db) {
+    database->RegisterObserver(this);
+}
+
+Teacher::Teacher(const std::string& name, Database* database) : name(name), database(database) {
+    database->RegisterTeacher(this);
+}
+
 int main() {
-    // Создаем объекты кафедры и деканата
-    Department department;
-    DeanOffice deanOffice;
+    srand(time(nullptr));
 
-    // Подписываем кафедру на уведомления деканата
-    deanOffice.attach(&department);
+    Database database;
+    Deanery deanery(&database);
 
-    // Преподаватель создает текущую успеваемость
-    bool success = false; // предположим, что успеваемость создана успешно
+    // Registering teachers
+    Teacher teacher1("Teacher1", &database);
+    Teacher teacher2("Teacher2", &database);
+    Teacher teacher3("Teacher3", &database);
 
-    // Деканат получает информацию о создании успеваемости и оповещает кафедру
-    deanOffice.createProgress(success);
+    // Simulating end of the week
+    database.EndOfWeek();
 
     return 0;
 }
